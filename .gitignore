@@ -1,0 +1,40 @@
+﻿# 虚拟环境
+venv/
+env/
+.venv/
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 模型文件
+*.pt
+*.pth
+*.bin
+*.ckpt
+*.h5
+*.onnx
+
+# 数据文件
+data/
+dataset/
+*.csv
+*.json
+*.txt
+
+# 训练日志
+logs/
+runs/
+*.log
+checkpoints/
+
+# IDE配置
+.vscode/
+.idea/
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
