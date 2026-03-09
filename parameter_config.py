@@ -7,15 +7,15 @@ class ParameterConfig():
         # 下载cuda版本的pytorch链接：https://pytorch.org/get-started/previous-versions/
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # 词典路径：在vocab文件夹里面
-        self.vocab_path = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\练习版基于gpt的问诊机器人\vocab\vocab.txt'
+        self.vocab_path = r'/KidMed-Q2\vocab\vocab.txt'
         # 训练文件路径
-        self.train_path = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\练习版基于gpt的问诊机器人\data\medical_train.pkl'
+        self.train_path = r'/KidMed-Q2\data\medical_train.pkl'
         # 验证数据文件路径
-        self.valid_path = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\练习版基于gpt的问诊机器人\data\medical_train.pkl'
+        self.valid_path = r'/KidMed-Q2\data\medical_train.pkl'
         # 模型配置文件
         self.config_json = 'config/config.json'
         # 模型保存路径
-        self.save_model_path = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\练习版基于gpt的问诊机器人\savemodel1'
+        self.save_model_path = r'/KidMed-Q2\savemodel1'
         # 如果你有预训练模型就写上路径（我们本次没有直接运用GPT2它预训练好的模型，而是仅只用了该模型的框架）
         #D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\02-代码\02-Gpt2_Chatbot\save_model\epoch97
         self.pretrained_model = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\02-代码\02-Gpt2_Chatbot\save_model\epoch97'

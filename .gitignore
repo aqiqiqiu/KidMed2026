@@ -1,40 +1,89 @@
 ﻿# 虚拟环境
 venv/
 env/
-.venv/
+.env
+ENV/
+env.bak/
+venv.bak/
 
-# Python缓存
+# Python 缓存
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
 
-# 模型文件
+# 模型文件（Q2 相关）
+*.safetensors
+*.bin
 *.pt
 *.pth
-*.bin
 *.ckpt
-*.h5
 *.onnx
+*.pickle
+*.joblib
+*.h5
+*.hdf5
+*.keras
 
 # 数据文件
-data/
-dataset/
 *.csv
 *.json
-*.txt
+*.xlsx
+*.xls
+*.parquet
+*.feather
+data/
+datasets/
 
-# 训练日志
-logs/
-runs/
+# 日志文件
 *.log
-checkpoints/
+logs/
+wandb/
+runs/
 
-# IDE配置
+# 配置文件（如果包含敏感信息）
+*.local
+*.local.py
+config.local.yaml
+.env.local
+.env.*.local
+
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 检查点
+checkpoints/
+savemodel*/
+output/
+results/
 
 # 临时文件
 *.tmp
 *.temp
-.DS_Store
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# 训练缓存
+.cache/
+.lock/
+.dvc/
+
+# 根据你的项目结构调整
+vocab/
+downloads/
+models/
+weights/

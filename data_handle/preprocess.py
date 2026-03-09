@@ -38,7 +38,7 @@ def preprocess(train_txt_path,train_pkl_path):
         pickle.dump(dialogue_list,f)
 
 if __name__ == '__main__':
-    # train_txt_path = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\练习版基于gpt的问诊机器人\data\medical_train.txt'
-    train_txt_path = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\练习版基于gpt的问诊机器人\data\medical_valid.txt'
-    train_pkl_path = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\练习版基于gpt的问诊机器人\data\medical_valid_1.pkl'
+    # train_txt_path = r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\KidMed-Q2\data\medical_train.txt'
+    train_txt_path = r'/KidMed-Q2\data\medical_valid.txt'
+    train_pkl_path = r'/KidMed-Q2\data\medical_valid_1.pkl'
     preprocess(train_txt_path,train_pkl_path)

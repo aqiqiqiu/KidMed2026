@@ -16,7 +16,7 @@ class MyDataset(Dataset):
 
 if __name__ == '__main__':
     import pickle
-    input_ids = pickle.load(open(r'D:\黑马python+ai\53-黑马程序员-2025年python人工智能开发 V6.5\阶段九\009 大模型开发基础与项目-V5.0-AI版\03-code\练习版基于gpt的问诊机器人\data\medical_valid_1.pkl','rb'))
+    input_ids = pickle.load(open(r'/KidMed-Q2\data\medical_valid_1.pkl', 'rb'))
     dataset = MyDataset(input_ids,10)
     # 获取第三个样本
     print(dataset.__getitem__(3))
