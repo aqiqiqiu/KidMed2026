@@ -1,237 +1,199 @@
+import sys
 import os
 import torch
-import pickle
 from datetime import datetime
+import transformers
+from transformers import GPT2LMHeadModel, GPT2Config, GPT2Model, get_linear_schedule_with_warmup
+from transformers import BertTokenizerFast
 from torch.optim import AdamW
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    get_linear_schedule_with_warmup,
-    DataCollatorForLanguageModeling
-)
-from torch.utils.data import Dataset, DataLoader
-from parameter_config import ParameterConfig
-import logging
-
-# 设置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from function_tools import *  # 注意：是 functions_tools 不是 function_tools
+from parameter_config import *
+from data_handle.dataloader import get_loader
 
 
-class MedicalDataset(Dataset):
-    def __init__(self, data_path, tokenizer, max_len=512):
-        self.tokenizer = tokenizer
-        self.max_len = max_len
+def train_epoch(model, train_dataloader, optimizer, scheduler, epoch, config):
+    model.train()
+    model.to(config.device)
+    ignore_index = config.ignore_index
+    loss_sum = 0
+    correct = 0
+    total_words = 0
 
-        # 加载数据
-        with open(data_path, 'rb') as f:
-            raw_data = pickle.load(f)
+    print(f"开始训练 Epoch {epoch + 1}")
 
-        self.examples = []
-        for item in raw_data:
-            if isinstance(item, list):
-                # 如果是token IDs，先解码
-                text = tokenizer.decode(item, skip_special_tokens=True)
-            else:
-                text = item
+    for idx, (input_id, labels) in enumerate(train_dataloader):
+        input_ids = input_id.to(config.device)
+        labels = labels.to(config.device)
 
-            # 转换为对话格式
-            if "用户:" in text or "助手:" in text:
-                # 已经是对话格式
-                self.examples.append(text)
-            else:
-                # 尝试解析为问答对
-                self._parse_qa_pair(text)
+        outputs = model(input_ids, labels=labels)
+        logits = outputs.logits
+        loss = outputs.loss
 
-        logger.info(f"加载了 {len(self.examples)} 条训练数据")
+        n_c, n_word = calculate_acc(logits, labels, ignore_index)
+        correct += n_c
+        total_words += n_word
 
-    def _parse_qa_pair(self, text):
-        """解析问答对为对话格式"""
-        # 简单的启发式分割
-        if "？" in text or "?" in text:
-            parts = text.split("？" if "？" in text else "?")
-            if len(parts) >= 2:
-                question = parts[0] + "？"
-                answer = "？".join(parts[1:])  # 可能有多个部分
+        if config.gradient_accumulation_steps > 1:
+            loss = loss / config.gradient_accumulation_steps
 
-                # 格式化为对话
-                dialogue = f"用户：{question}\n助手：{answer}"
-                self.examples.append(dialogue)
+        loss.backward()
 
-    def __len__(self):
-        return len(self.examples)
+        if (idx + 1) % config.gradient_accumulation_steps == 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
+            optimizer.step()
+            scheduler.step()
+            optimizer.zero_grad()
 
-    def __getitem__(self, idx):
-        text = self.examples[idx]
+        loss_sum += loss.item() * config.gradient_accumulation_steps
 
-        # Qwen的对话格式
-        messages = [
-            {"role": "user", "content": text.split("助手：")[0].replace("用户：", "").strip()},
-            {"role": "assistant", "content": text.split("助手：")[1].strip()}
-        ]
+        if (idx + 1) % 100 == 0:
+            avg_loss = loss_sum / (idx + 1)
+            avg_acc = correct / total_words if total_words > 0 else 0
+            print(f"  Batch {idx + 1}/{len(train_dataloader)}, Loss: {avg_loss:.4f}, Acc: {avg_acc:.4f}")
 
-        # 应用聊天模板
-        prompt = self.tokenizer.apply_chat_template(
-            messages[:-1],  # 只有用户消息
-            tokenize=False,
-            add_generation_prompt=True
-        )
-        full_text = prompt + messages[-1]["content"] + self.tokenizer.eos_token
+    epoch_loss = loss_sum / len(train_dataloader)
+    epoch_acc = correct / total_words if total_words > 0 else 0
 
-        # 编码
-        encodings = self.tokenizer(
-            full_text,
-            truncation=True,
-            max_length=self.max_len,
-            padding=False,
-            return_tensors=None
-        )
+    print(f"Epoch {epoch + 1} 完成, 平均 Loss: {epoch_loss:.4f}, 平均 Acc: {epoch_acc:.4f}")
 
-        input_ids = encodings["input_ids"]
+    # 保存模型
+    print(f'正在保存第 {epoch + 1} 轮的模型...')
+    epoch_start_time = datetime.now()
+    model_path = os.path.join(config.save_model_path, f'bj_epoch{epoch + 1}')
+    os.makedirs(model_path, exist_ok=True)
+    model.save_pretrained(model_path)
+    print(f'第 {epoch + 1} 轮模型保存完成')
+    epoch_finish_time = datetime.now()
+    print(f'本轮训练时间: {epoch_finish_time - epoch_start_time}')
 
-        # 创建标签（只计算助手部分的损失）
-        prompt_len = len(self.tokenizer.encode(prompt, add_special_tokens=False))
-        labels = [-100] * prompt_len + input_ids[prompt_len:]
-
-        return {
-            "input_ids": torch.tensor(input_ids),
-            "labels": torch.tensor(labels)
-        }
+    return epoch_loss
 
 
-def collate_fn(batch):
-    """动态padding"""
-    input_ids = [item["input_ids"] for item in batch]
-    labels = [item["labels"] for item in batch]
+def validate_epoch(model, validate_dataloader, epoch, config):
+    print("开始验证...")
+    model.eval()
+    device = config.device
+    ignore_index = config.ignore_index
+    epoch_start_time = datetime.now()
+    total_loss = 0
 
-    # 找到最大长度
-    max_len = max(len(ids) for ids in input_ids)
+    with torch.no_grad():
+        for batch_idx, (input_ids, labels) in enumerate(validate_dataloader):
+            input_ids = input_ids.to(device)
+            labels = labels.to(device)
+            outputs = model(input_ids, labels=labels)
+            loss = outputs.loss
+            total_loss += loss.item()
 
-    # padding
-    padded_input_ids = []
-    padded_labels = []
-    attention_masks = []
+            # 删除这里的 break！
 
-    for ids, lbls in zip(input_ids, labels):
-        padding_len = max_len - len(ids)
-        padded_input_ids.append(torch.cat([ids, torch.zeros(padding_len, dtype=torch.long)]))
-        padded_labels.append(torch.cat([lbls, torch.zeros(padding_len, dtype=torch.long)]))
-        attention_masks.append(torch.cat([torch.ones(len(ids)), torch.zeros(padding_len)]))
-
-    return {
-        "input_ids": torch.stack(padded_input_ids),
-        "labels": torch.stack(padded_labels),
-        "attention_mask": torch.stack(attention_masks)
-    }
+    epoch_mean_loss = total_loss / len(validate_dataloader)
+    print(f"validate epoch {epoch + 1}: loss {epoch_mean_loss:.6f}")
+    epoch_finish_time = datetime.now()
+    print(f'验证时间: {epoch_finish_time - epoch_start_time}')
+    return epoch_mean_loss
 
 
-def train():
-    config = ParameterConfig()
+def train(model, train_dataloader, valid_dataloader, config):
+    # 计算总训练步数
+    t_total = len(train_dataloader) // config.gradient_accumulation_steps * config.epochs
 
-    # 加载tokenizer和模型
-    logger.info(f"加载模型: {config.model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.model_name,
-        trust_remote_code=True,
-        padding_side="right"
-    )
-
-    # 设置pad_token
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    model = AutoModelForCausalLM.from_pretrained(
-        config.model_name,
-        trust_remote_code=True,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-        device_map="auto"
-    )
-
-    # 加载数据集
-    logger.info("加载训练数据")
-    train_dataset = MedicalDataset(config.train_path, tokenizer, config.max_len)
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config.batch_size,
-        shuffle=True,
-        collate_fn=collate_fn,
-        num_workers=0
-    )
-
-    # 优化器
     optimizer = AdamW(model.parameters(), lr=config.lr, eps=config.eps)
 
-    # 总训练步数
-    t_total = len(train_loader) * config.epochs // config.gradient_accumulation_steps
-
-    # 学习率调度器
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
         num_warmup_steps=config.warmup_steps,
         num_training_steps=t_total
     )
 
-    # 训练
-    logger.info("开始训练")
-    model.train()
-    global_step = 0
-    total_loss = 0
+    train_loss_list = []
+    valid_loss_list = []
+    valid_loss_best = float('inf')
+
+    print(f"开始训练，共 {config.epochs} 轮")
+    print(f"训练数据批次: {len(train_dataloader)}")
+    print(f"总优化步数: {t_total}")
+    print("=" * 50)
 
     for epoch in range(config.epochs):
-        epoch_loss = 0
-        for step, batch in enumerate(train_loader):
-            # 移至设备
-            input_ids = batch["input_ids"].to(config.device)
-            labels = batch["labels"].to(config.device)
-            attention_mask = batch["attention_mask"].to(config.device)
+        print(f"\nEpoch {epoch + 1}/{config.epochs}")
+        print("-" * 30)
 
-            # 前向传播
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=labels
-            )
-            loss = outputs.loss
+        # 训练
+        train_loss = train_epoch(
+            model, train_dataloader, optimizer, scheduler, epoch, config
+        )
+        train_loss_list.append(train_loss)
+        print(f"训练 Loss: {train_loss:.6f}")
 
-            # 梯度累积
-            if config.gradient_accumulation_steps > 1:
-                loss = loss / config.gradient_accumulation_steps
+        # 验证
+        valid_loss = validate_epoch(
+            model, valid_dataloader, epoch, config
+        )
+        valid_loss_list.append(valid_loss)
+        print(f"验证 Loss: {valid_loss:.6f}")
 
-            loss.backward()
+        # 保存最佳模型
+        if valid_loss < valid_loss_best:
+            valid_loss_best = valid_loss
+            print(f"发现更好的模型，验证 Loss 降到 {valid_loss:.6f}")
+            os.makedirs(config.save_model_path, exist_ok=True)
+            model.save_pretrained(config.save_model_path)
+            print(f"模型已保存到 {config.save_model_path}")
 
-            epoch_loss += loss.item()
-            total_loss += loss.item()
+        # 每5轮打印总结
+        if (epoch + 1) % 5 == 0:
+            avg_train = sum(train_loss_list[-5:]) / 5
+            avg_valid = sum(valid_loss_list[-5:]) / 5
+            print(f"\n最近5轮平均 - 训练 Loss: {avg_train:.6f}, 验证 Loss: {avg_valid:.6f}")
 
-            # 更新参数
-            if (step + 1) % config.gradient_accumulation_steps == 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
-                optimizer.step()
-                scheduler.step()
-                optimizer.zero_grad()
-                global_step += 1
-
-            # 打印进度
-            if step % 50 == 0:
-                logger.info(
-                    f"Epoch {epoch + 1}/{config.epochs}, Step {step}/{len(train_loader)}, Loss: {loss.item():.4f}")
-
-        # 每个epoch结束后保存模型
-        avg_epoch_loss = epoch_loss / len(train_loader)
-        logger.info(f"Epoch {epoch + 1} 完成，平均 Loss: {avg_epoch_loss:.4f}")
-
-        # 保存模型
-        save_path = os.path.join(config.save_model_path, f'epoch_{epoch + 1}')
-        os.makedirs(save_path, exist_ok=True)
-        model.save_pretrained(save_path)
-        tokenizer.save_pretrained(save_path)
-        logger.info(f"模型已保存到 {save_path}")
-
-    # 保存最终模型
-    model.save_pretrained(config.save_model_path)
-    tokenizer.save_pretrained(config.save_model_path)
-    logger.info(f"训练完成，最终模型保存到 {config.save_model_path}")
+    print("\n" + "=" * 50)
+    print("训练完成！")
+    print(f"最佳验证 Loss: {valid_loss_best:.6f}")
+    return train_loss_list, valid_loss_list
 
 
-if __name__ == "__main__":
-    train()
+def main():
+    config = ParameterConfig()
+
+    # 1. 分词器 - 正确初始化
+    vocab_dir = os.path.dirname(config.vocab_path)
+    tokenizer = BertTokenizerFast.from_pretrained(
+        vocab_dir,
+        sep_token="[SEP]",
+        pad_token="[PAD]",
+        cls_token="[CLS]"
+    )
+    print(f"词汇表大小: {len(tokenizer)}")  # 现在应该是13317
+
+    # 2. 模型
+    if config.pretrained_model and os.path.exists(config.pretrained_model):
+        print(f"加载预训练模型: {config.pretrained_model}")
+        model = GPT2LMHeadModel.from_pretrained(config.pretrained_model)
+    else:
+        print("创建新模型")
+        conf = GPT2Config.from_json_file(config.config_json)
+        model = GPT2LMHeadModel(config=conf)
+
+    model.to(config.device)
+    print(f"模型词汇表大小: {model.config.vocab_size}")  # 应该是13317
+
+    # 验证两个词汇表是否匹配
+    if len(tokenizer) != model.config.vocab_size:
+        print(f"警告：tokenizer词汇表({len(tokenizer)})和模型词汇表({model.config.vocab_size})不匹配！")
+
+    # 3. 数据加载
+    print("加载数据...")
+    train_dataloader, valid_dataloader = get_loader(
+        train_path=config.train_path,
+        valid_path=config.valid_path
+    )
+    print(f"训练数据批次: {len(train_dataloader)}")
+    print(f"验证数据批次: {len(valid_dataloader)}")
+
+    # 4. 训练
+    train(model, train_dataloader, valid_dataloader, config)
+
+
+if __name__ == '__main__':
+    main()
