@@ -1,27 +1,586 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ai儿童在线问诊</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>AI儿童健康咨询 - 智能小助手</title>
+    <!-- 引入 Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 添加 Font Awesome 图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- 添加动画库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, system-ui, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(145deg, #f0f9ff 0%, #e6f2fa 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .chat-container {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 32px;
+            box-shadow: 0 20px 40px -12px rgba(0, 100, 150, 0.3),
+                        0 4px 18px rgba(0, 0, 0, 0.05),
+                        inset 0 1px 2px rgba(255, 255, 255, 0.8);
+            overflow: hidden;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        /* 头部样式 */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px dashed #b8d9f0;
+        }
+
+        .header-icon {
+            background: linear-gradient(135deg, #4aa3e2, #2b7fc2);
+            width: 64px;
+            height: 64px;
+            border-radius: 20px 20px 20px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 34px;
+            box-shadow: 0 8px 16px -4px #9ac1db;
+            transform: rotate(-2deg);
+        }
+
+        .header-text h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #0369a1, #075985);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+
+        .header-text p {
+            color: #2e5f83;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .header-text p i {
+            color: #7ab0d9;
+        }
+
+        /* 输入区域 */
+        .input-wrapper {
+            background: white;
+            border-radius: 40px;
+            padding: 6px 6px 6px 24px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 8px 20px -6px rgba(52, 132, 196, 0.25);
+            border: 1px solid rgba(164, 204, 240, 0.5);
+            margin-bottom: 24px;
+            transition: all 0.2s;
+        }
+
+        .input-wrapper:focus-within {
+            box-shadow: 0 12px 24px -8px #7bb0d3, 0 0 0 3px rgba(74, 163, 226, 0.2);
+            border-color: #4aa3e2;
+        }
+
+        .input-wrapper input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 1.1rem;
+            padding: 16px 0;
+            background: transparent;
+            color: #14597a;
+        }
+
+        .input-wrapper input::placeholder {
+            color: #aac6dd;
+            font-size: 1rem;
+        }
+
+        .input-wrapper button {
+            background: #3f9ad8;
+            border: none;
+            color: white;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            font-size: 1.6rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(46, 125, 189, 0.4);
+            border: 2px solid white;
+        }
+
+        .input-wrapper button:hover:not(:disabled) {
+            background: #1f7abf;
+            transform: scale(1.05);
+        }
+
+        .input-wrapper button:disabled {
+            background: #b8cfdf;
+            box-shadow: none;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* 消息列表区域 */
+        .messages-container {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(4px);
+            border-radius: 24px;
+            padding: 24px;
+            min-height: 350px;
+            max-height: 500px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            scroll-behavior: smooth;
+        }
+
+        /* 自定义滚动条 */
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: #e1eff8;
+            border-radius: 10px;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: #91b9da;
+            border-radius: 10px;
+        }
+
+        /* 消息气泡 */
+        .message {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 24px;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .avatar {
+            width: 46px;
+            height: 46px;
+            border-radius: 46px;
+            background: #d3e7fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: #1a608b;
+            flex-shrink: 0;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.03);
+        }
+
+        .message.user .avatar {
+            background: #c1e0c1;
+            color: #1f6e4a;
+        }
+
+        .bubble {
+            background: white;
+            padding: 16px 20px;
+            border-radius: 22px 22px 22px 8px;
+            max-width: calc(100% - 70px);
+            box-shadow: 0 4px 14px rgba(70, 130, 180, 0.1);
+            font-size: 1.05rem;
+            line-height: 1.5;
+            color: #1a3b4f;
+            word-break: break-word;
+            border: 1px solid rgba(255,255,255,0.8);
+        }
+
+        .message.user .bubble {
+            background: #e3f0fd;
+            border-radius: 22px 22px 8px 22px;
+            color: #03588c;
+            font-weight: 500;
+            border: 1px solid rgba(200, 225, 245, 0.9);
+        }
+
+        /* 空状态 */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: #769ebd;
+            text-align: center;
+        }
+
+        .empty-state i {
+            font-size: 70px;
+            margin-bottom: 16px;
+            opacity: 0.6;
+        }
+
+        .empty-state p {
+            font-size: 1.2rem;
+            background: rgba(255,255,255,0.7);
+            padding: 12px 24px;
+            border-radius: 60px;
+            backdrop-filter: blur(2px);
+        }
+
+        /* 快捷提问卡片 */
+        .quick-questions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 16px;
+        }
+
+        .quick-chip {
+            background: white;
+            padding: 10px 18px;
+            border-radius: 40px;
+            font-size: 0.95rem;
+            color: #0d5b86;
+            box-shadow: 0 3px 10px rgba(110, 170, 220, 0.15);
+            border: 1px solid rgba(110, 170, 220, 0.3);
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .quick-chip:hover:not(.disabled) {
+            background: #e0f0fd;
+            border-color: #4799d3;
+            transform: translateY(-2px);
+        }
+
+        .quick-chip.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .quick-chip i {
+            font-size: 0.9rem;
+            color: #4aa3e2;
+        }
+
+        /* 加载指示器 */
+        .loading-dots {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 40px;
+            width: fit-content;
+            margin: 10px 0 10px 60px;
+        }
+
+        .loading-dots span {
+            color: #4582a8;
+            font-weight: 500;
+        }
+
+        .dot-flashing {
+            display: flex;
+            gap: 5px;
+        }
+
+        .dot-flashing div {
+            width: 8px;
+            height: 8px;
+            border-radius: 8px;
+            background: #5fa3d1;
+            animation: dotFlashing 0.8s infinite alternate;
+        }
+
+        .dot-flashing div:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .dot-flashing div:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes dotFlashing {
+            0% { opacity: 0.3; transform: translateY(0); }
+            100% { opacity: 1; transform: translateY(-5px); }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .footer-note {
+            margin-top: 16px;
+            font-size: 0.9rem;
+            color: #6c95b4;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .error-message {
+            color: #d14545;
+            background: #ffe9e9;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            margin-top: 8px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-    <h1>健康咨询小助手</h1>
+{% raw %}
+    <div id="app">
+        <div class="chat-container">
+            <!-- 头部 -->
+            <div class="header">
+                <div class="header-icon">
+                    <i class="fas fa-child"></i>
+                </div>
+                <div class="header-text">
+                    <h1>健康咨询小助手</h1>
+                    <p><i class="fas fa-notes-medical"></i> 儿童专属 · 耐心解答 · 科学指导</p>
+                </div>
+            </div>
 
-    <form action="/ask" method="post">
-        <label for="user_input">输入问题：</label>
-        <input type="text" id="user_input" name="user_input" required>
-        <button type="submit">提交</button>
-    </form>
+            <!-- 输入框 -->
+            <div class="input-wrapper">
+                <input
+                    type="text"
+                    v-model="userInput"
+                    placeholder="例如：宝宝咳嗽有痰怎么办？"
+                    @keyup.enter="sendMessage"
+                    :disabled="isLoading"
+                >
+                <button @click="sendMessage" :disabled="!userInput.trim() || isLoading">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
 
-    {% if user_input %}
-        <h2>用户输入：</h2>
-        <p>{{ user_input }}</p>
+            <!-- 消息列表 -->
+            <div class="messages-container" ref="messageContainer">
+                <!-- 空状态 -->
+                <div v-if="messages.length === 0" class="empty-state">
+                    <i class="far fa-smile"></i>
+                    <p>你好呀！我是你的健康小助手<br>有什么关于小朋友健康的问题吗？</p>
+                </div>
 
-        {% if answer %}
-            <h2>模型回答：</h2>
-            <p>{{ answer }}</p>
-        {% endif %}
-    {% endif %}
+                <!-- 消息循环 -->
+                <div v-for="(msg, index) in messages" :key="index" :class="['message', msg.role]">
+                    <div class="avatar">
+                        <i :class="msg.role === 'user' ? 'fas fa-user' : 'fas fa-robot'"></i>
+                    </div>
+                    <div class="bubble">{{ msg.content }}</div>
+                </div>
+
+                <!-- 加载动画 -->
+                <div v-if="isLoading" class="loading-dots">
+                    <span>小助手正在输入</span>
+                    <div class="dot-flashing">
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 错误提示 -->
+            <div v-if="error" class="error-message animate__animated animate__shakeX">
+                <i class="fas fa-exclamation-circle"></i> {{ error }}
+            </div>
+
+            <!-- 快捷提问 -->
+            <div class="quick-questions">
+                <div class="quick-chip" @click="quickQuestion('宝宝发烧38.5度，怎么办？')" :class="{ disabled: isLoading }">
+                    <i class="fas fa-thermometer-half"></i> 发烧
+                </div>
+                <div class="quick-chip" @click="quickQuestion('孩子晚上咳嗽厉害')" :class="{ disabled: isLoading }">
+                    <i class="fas fa-lungs"></i> 咳嗽
+                </div>
+                <div class="quick-chip" @click="quickQuestion('宝宝拉肚子，可以吃什么药？')" :class="{ disabled: isLoading }">
+                    <i class="fas fa-poo"></i> 腹泻
+                </div>
+                <div class="quick-chip" @click="quickQuestion('身上起红疹，很痒')" :class="{ disabled: isLoading }">
+                    <i class="fas fa-allergies"></i> 皮疹
+                </div>
+                <div class="quick-chip" @click="quickQuestion('如何提高孩子免疫力？')" :class="{ disabled: isLoading }">
+                    <i class="fas fa-apple-alt"></i> 营养
+                </div>
+            </div>
+
+            <!-- 页脚提示 -->
+            <div class="footer-note">
+                <i class="fas fa-shield-alt"></i> AI建议仅供参考，急重症请立即就医
+                <i class="fas fa-heartbeat" style="color: #f06292;"></i>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, watch, nextTick } = Vue;
+
+        const app = createApp({
+            setup() {
+                // 响应式数据
+                const userInput = ref('');
+                const messages = ref([]);
+                const isLoading = ref(false);
+                const error = ref('');
+                const messageContainer = ref(null);
+
+                // 发送消息到后端
+                const sendMessage = async () => {
+                    const message = userInput.value.trim();
+                    if (!message || isLoading.value) return;
+
+                    // 添加用户消息到列表
+                    messages.value.push({
+                        role: 'user',
+                        content: message
+                    });
+
+                    // 清空输入框
+                    userInput.value = '';
+
+                    // 滚动到底部
+                    scrollToBottom();
+
+                    // 开始加载
+                    isLoading.value = true;
+                    error.value = '';
+
+                    try {
+                        // 调用后端 API
+                        const response = await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ message: message })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('网络请求失败');
+                        }
+
+                        const data = await response.json();
+
+                        // 添加助手回复
+                        messages.value.push({
+                            role: 'assistant',
+                            content: data.answer
+                        });
+
+                    } catch (err) {
+                        console.error('Error:', err);
+                        error.value = '网络连接失败，请稍后重试';
+
+                        // 添加错误提示
+                        messages.value.push({
+                            role: 'assistant',
+                            content: '😔 抱歉，我现在有点忙，请稍后再试。'
+                        });
+                    } finally {
+                        isLoading.value = false;
+                        scrollToBottom();
+                    }
+                };
+
+                // 快捷提问
+                const quickQuestion = (question) => {
+                    if (isLoading.value) return;
+                    userInput.value = question;
+                    sendMessage();
+                };
+
+                // 滚动到底部
+                const scrollToBottom = async () => {
+                    await nextTick();
+                    if (messageContainer.value) {
+                        messageContainer.value.scrollTop = messageContainer.value.scrollHeight;
+                    }
+                };
+
+                // 监听消息变化，自动滚动
+                watch(messages, () => {
+                    scrollToBottom();
+                }, { deep: true });
+
+                // 欢迎消息（可选）
+                onMounted(() => {
+                    // 可以添加一条欢迎消息
+                    messages.value.push({
+                        role: 'assistant',
+                        content: '👋 你好！我是儿童健康小助手，有什么可以帮你的吗？'
+                    });
+                });
+
+                return {
+                    userInput,
+                    messages,
+                    isLoading,
+                    error,
+                    messageContainer,
+                    sendMessage,
+                    quickQuestion
+                };
+            }
+        });
+
+        app.mount('#app');
+    </script>
+{% endraw %}
 </body>
 </html>
